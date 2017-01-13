@@ -39,7 +39,7 @@ for _ in range(1000):
         t += 1
         if done:
             print("Episode finished after {} timesteps".format(t))
-            reward = -1.0
+            reward = 0
             break
     if t == end:
         count += 1
