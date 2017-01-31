@@ -6,5 +6,7 @@ Plan to learn RL by doing some interesting stuff, like playing game with gym
 
 ## Cartpole
 
-How to keep the balance
+## Frozen Lake
 
+Implementing almost the most naive Q-learning algorithm to deal with this
+easy task. 
