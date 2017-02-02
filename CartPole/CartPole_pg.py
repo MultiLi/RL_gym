@@ -56,9 +56,9 @@ o = env.reset()
 avrreward = []
 while iter < 3000:
     xin.append(o.reshape(1,-1))
-    # if rsum / BATCH_SIZE > 1000 or rendering:
-    #     rendering = True
-    #     env.render()
+    if rsum / BATCH_SIZE > 10000 or rendering:
+        rendering = True
+        env.render()
     y,h = forward(xin[-1],w1,w2,b1,b2)
     hidden.append(h)
     action = 1 if np.random.rand() < y else 0
