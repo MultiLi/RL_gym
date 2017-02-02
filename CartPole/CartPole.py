@@ -4,7 +4,8 @@ from matplotlib import pyplot as plt
 
 REWARD_DECAY = 0.98
 LRATE = 0.05
-BATCH_SIZE = 20
+MOMENTUM = 0.9
+BATCH_SIZE = 50
 
 
 def sigmoid(x):
@@ -53,9 +54,9 @@ rsum = 0
 o = env.reset()
 
 avrreward = []
-while iter < 10000:
+while iter < 3000:
     xin.append(o.reshape(1,-1))
-    # if rsum / BATCH_SIZE > 500 or rendering:
+    # if rsum / BATCH_SIZE > 1000 or rendering:
     #     rendering = True
     #     env.render()
     y,h = forward(xin[-1],w1,w2,b1,b2)
@@ -75,23 +76,27 @@ while iter < 10000:
         R = accumulated_reward(reward)
         xin,reward, obs,out,hidden, label = [],[],[],[],[],[]
 
-        xw1,xw2,xb1,xb2 = backward(T,Y,H,X,w2,b2,R)
-        dw1 += LRATE / (1 + iter / 1000) * xw1
-        dw2 += LRATE / (1 + iter / 1000) * xw2
-        db1 += LRATE / (1 + iter / 1000) * xb1
-        db2 += LRATE / (1 + iter / 1000) * xb2
-        iter += 1
-        if iter % BATCH_SIZE == 0:
+        for i in range(5):
+            xw1,xw2,xb1,xb2 = backward(T,Y,H,X,w2,b2,R)
+            dw1 = MOMENTUM * dw1 + LRATE / (1 + iter / 1000) * xw1
+            dw2 = MOMENTUM * dw2 + LRATE / (1 + iter / 1000) * xw2
+            db1 = MOMENTUM * db1 + LRATE / (1 + iter / 1000) * xb1
+            db2 = MOMENTUM * db2 + LRATE / (1 + iter / 1000) * xb2
             w1 +=  dw1
             w2 +=  dw2
             b1 +=  db1
             b2 +=  db2
-            dw1,dw2,b1,b2 = np.zeros_like(w1),np.zeros_like(w2),np.zeros_like(b1),0
+            forward(X,w1,w2,b1,b2)
+
+        iter += 1
+        if iter % BATCH_SIZE == 0:
+
+            # dw1,dw2,b1,b2 = np.zeros_like(w1),np.zeros_like(w2),np.zeros_like(b1),0
             avrreward.append(rsum / BATCH_SIZE)
             rsum = 0
             # if iter == 5000:
             #     print rsum / BATCH_SIZE
-            # print iter
+            print iter
 
         o = env.reset()
         # print iter
