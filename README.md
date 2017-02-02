@@ -4,7 +4,8 @@ RL_gym
 Plan to learn RL by doing some interesting stuff, like playing game with gym
 
 
-## Cartpole
+## CartPole
+1. Simple policy gradient method, using a hand-written naive 3-layer neural network
 
 ## Frozen Lake
 
