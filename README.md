@@ -7,7 +7,8 @@ Plan to learn RL by doing some interesting stuff, like playing game provided by 
 
 Observation can reflect the state of the agent, but is continuous. So we need to parameterize the environment space.
 
-1. CartPole_pg: Simple policy gradient method, using a hand-written naive 3-layer neural network
+1. CartPole_pg: Simple policy gradient method, using a hand-written naive 2-layer neural network
+2. CartPole_q: Try to solve the problem with Q-learning, still working on it.
 
 ## Frozen Lake
 

@@ -1,27 +1,28 @@
 import gym
+from gym import wrappers
 import numpy as np
 from matplotlib import pyplot as plt
 
-REWARD_DECAY = 0.98
-LRATE = 0.05
-MOMENTUM = 0.9
-BATCH_SIZE = 50
+REWARD_DECAY = 0.95
+LRATE = 0.01
+MOMENTUM = 0.95
+BATCH_SIZE = 5
 
 
 def sigmoid(x):
     return 1.0 / ( 1+ np.exp(-x))
 
 def forward(x,w1,w2,b1,b2):
-    h = np.dot(x, w1) + b1           # Hidden Layer
-    h[h < 0] = 0
-    y = sigmoid(np.dot(h, w2) + b2)            # Output Layer
+    h = np.dot(x, w1) + b1                  # Hidden Layer
+    h[h < 0] = 0                            # Relu Activation
+    y = sigmoid(np.dot(h, w2) + b2)         # Output Layer
     return y,h
 
 def backward(t, y, h, x, w2,b2, r):
-    diff = (1 - y - t) * r /y.shape[0]
-    dw2 = np.dot(h.T, diff)                     # (n x 4)' * (n x 2) -> ( 4 x 2)
+    diff = (1 - y - t) * r /y.shape[0]      # REINFORCE gradient
+    dw2 = np.dot(h.T, diff)
     db2 = np.sum(diff, axis = 0)
-    dh = np.dot(diff, w2.T)        # (n x 2) * ( 2 x 4) -> ( n x 4)
+    dh = np.dot(diff, w2.T)
     dw1 = np.dot(x.T, dh)
     db1 = np.sum(dh, axis = 0)
     return dw1, dw2, db1, db2
@@ -38,26 +39,26 @@ def accumulated_reward(r):
     accu_reward /= np.std(accu_reward)
     return accu_reward
 
-
+# Parameters Initialization
 w1 = np.random.randn(4,8) / np.sqrt(4)
 w2 = np.random.randn(8,1) / np.sqrt(8)
 b1 = np.zeros([1,8])
 b2 = 0.0
-
 dw1,dw2,db1,db2 = np.zeros_like(w1),np.zeros_like(w2),np.zeros_like(b1),0
 
-env = gym.make('CartPole-v0')
-xin,reward,out,hidden, label = [],[],[],[],[]
-iter = 1
-rendering = False
-rsum = 0
-o = env.reset()
 
-avrreward = []
-while iter < 3000:
+xin,reward,out,hidden, label, avrreward = [],[],[],[],[],[]
+
+rendering = False
+
+env = gym.make('CartPole-v0')
+o = env.reset()
+rsum = 0
+
+iter = 1
+while iter < 1000:
     xin.append(o.reshape(1,-1))
-    if rsum / BATCH_SIZE > 10000 or rendering:
-        rendering = True
+    if rendering:
         env.render()
     y,h = forward(xin[-1],w1,w2,b1,b2)
     hidden.append(h)
@@ -76,7 +77,8 @@ while iter < 3000:
         R = accumulated_reward(reward)
         xin,reward, obs,out,hidden, label = [],[],[],[],[],[]
 
-        for i in range(5):
+        # Parameter update
+        for i in range(10):
             xw1,xw2,xb1,xb2 = backward(T,Y,H,X,w2,b2,R)
             dw1 = MOMENTUM * dw1 + LRATE / (1 + iter / 1000) * xw1
             dw2 = MOMENTUM * dw2 + LRATE / (1 + iter / 1000) * xw2
@@ -89,17 +91,15 @@ while iter < 3000:
             forward(X,w1,w2,b1,b2)
 
         iter += 1
+
         if iter % BATCH_SIZE == 0:
-
-            # dw1,dw2,b1,b2 = np.zeros_like(w1),np.zeros_like(w2),np.zeros_like(b1),0
             avrreward.append(rsum / BATCH_SIZE)
+            if avrreward[-1] > 5000:
+                rendering = True
             rsum = 0
-            # if iter == 5000:
-            #     print rsum / BATCH_SIZE
             print iter
-
         o = env.reset()
-        # print iter
 
+plt.figure()
 plt.plot(np.array(avrreward))
 plt.show()
