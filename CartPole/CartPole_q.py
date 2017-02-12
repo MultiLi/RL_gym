@@ -1,123 +1,101 @@
 import numpy as np
 import gym
 from matplotlib import pyplot as plt
+import sys
+sys.path.append('..')
+from nn_util.multilayer import Multilayer
 
-ETA = 0.001
-GAMMA = 0.9
-MOMENTUM = 0
+ETA = 0.01
+GAMMA = 0.98
+MOMENTUM = 0.95
 EPS_START = 0.05
 EPS_END = 0.95
 MEM_SIZE = 5000
+BATCH = 10
 MSIZE = 30
 
-def sigmoid(x):
-    return 1.0 / ( 1+ np.exp(-x))
 
-def forward(x,w1,w2,b1,b2):
-    h = sigmoid(np.dot(x, w1) + b1) # Hidden Layer
-    y = np.dot(h, w2) + b2          # Output Layer
-    return y,h
+class Memory():
+    def __init__(self, num):
+        self.pointer = -1
+        self.size = num
+        self.length = 0
+        self.s = np.zeros((num,4))
+        self.a = np.zeros(num,dtype = int)
+        self.r = np.zeros(num)
+        self.s1 = np.zeros((num,4))
 
-def backward(t, y, h, x, w2,b2):
-    diff = (y - t) /y.shape[0]
-    dw2 = np.dot(h.T, diff)
-    db2 = np.sum(diff, axis = 0)#.reshape((1,-1))
-    dh = np.dot(diff, w2.T) * h * (1-h)
-    dw1 = np.dot(x.T, dh)
-    db1 = np.sum(dh, axis = 0)#.reshape((1,-1))
-    return dw1, dw2, db1, db2
-
-w1 = np.random.randn(4,6) / np.sqrt(4)
-w2 = np.random.randn(6,2) / np.sqrt(6)
-b1,b2 = np.zeros([1,6]),np.zeros([1,2])
-dw1,dw2,db1,db2 = np.zeros_like(w1),np.zeros_like(w2),np.zeros_like(b1),np.zeros_like(b2)
+    def insert(self,s,a,r,ns):
+        self.pointer += 1
+        if self.pointer == self.size:
+            self.pointer = 0
+        self.s[self.pointer] = s
+        self.a[self.pointer] = a
+        self.r[self.pointer] = r
+        self.s1[self.pointer] = ns
+        if self.length < self.size:
+            self.length += 1
 
 
-initilized = False
+nn = Multilayer([[4,'in'],[64,'tanh'],[32,'tanh'],[2,'linear']],
+                eta = ETA, moment = MOMENTUM, reg = 0)
+
+exp_replay = Memory(MEM_SIZE)
+
 pl = []
 env = gym.make('CartPole-v0')
 rendering = False
 iter = 0
-while iter<100:
+while iter<50:
     # Game data collection
     num = 0
     obs = env.reset()
-
-    s_, a_, r_, s1_ = [],[],[],[]
     ep = 0
-    while ep < 5:
-        if num > 500 or rendering:
+    while ep < 30:
+        if num > 1000 or rendering:
             rendering = True
             env.render()
-        s_.append(obs)
-        q,_ = forward(np.array(obs).reshape((1,-1)),w1,w2,b1,b2)
-        action = np.argmax(q[0]) if np.random.rand() < EPS_START + (EPS_END - EPS_START) * iter/ 1000  else env.action_space.sample()
+        nn.predict(obs.reshape(1,-1))
+        q = nn.o[nn.depth][0]
+        action = np.argmax(q) if np.random.rand() < EPS_START + (EPS_END - EPS_START) * (iter * 30 + ep)/ 1000  else env.action_space.sample()
         obs1,r,done,info = env.step(action)
-        a_.append(action)
+        num += 1
+        exp_replay.insert(obs,action,r, obs1)
+        obs = obs1
+
         if done:
             obs = env.reset()
-            r_.append(-200)
-            s1_.append([0,0,0,0])
+            exp_replay.r[exp_replay.pointer] = -10
             pl.append(num)
             num = 0
             ep += 1
+
+        if exp_replay.length <  BATCH * MSIZE :
             continue
-        r_.append(r)
-        s1_.append(obs1)
-        obs = obs1
-        num += 1
 
-    # print r_
+        '''
+        mini- batch version
+        '''
+        ind_ = np.random.permutation(exp_replay.length)[:BATCH * MSIZE]
+        for i in range(BATCH):
+            ind = ind_[i * MSIZE: (i+1)* MSIZE ]
 
-    if not initilized:
-        mem_xs, mem_ac, mem_re, mem_xs1 = np.vstack(s_), np.array(a_), np.array(r_), np.vstack(s1_)
-        initilized = True
-    else:
-        start_ind = np.max([mem_xs.shape[0] + len(s_) - MEM_SIZE, 0])
-        # print 1
-        mem_xs = np.vstack((mem_xs[start_ind:], s_))
-        # print mem_xs
-        mem_xs1 = np.vstack((mem_xs1[start_ind:], s1_))
-        mem_re = np.hstack((mem_re[start_ind:], r_))
-        mem_ac = np.hstack((mem_ac[start_ind:], a_))
+            nn.predict(exp_replay.s1[ind])
+            y = exp_replay.r[ind] + GAMMA * np.max(nn.o[nn.depth],axis = 1) * (exp_replay.r[ind]> 0)
 
-    if mem_xs.shape[0] < MSIZE * 20:
-        continue
-    # print mem_ac
+            nn.predict(exp_replay.s[ind])
+            t = np.copy(nn.o[nn.depth])
+            t[np.arange(MSIZE), exp_replay.a[ind]] = y
 
-    bind = np.random.permutation(mem_xs.shape[0])
+            nn.backprop(t)
+            nn.update()
 
-    for i in range(mem_xs.shape[0] / MSIZE):
-        ind = bind[i * MSIZE: (i + 1) * MSIZE]
-        # ind = np.random.permutation(mem_xs.shape[0])[:MSIZE]
-        # print mem_xs[ind]
-        yy, h  = forward(mem_xs[ind],w1,w2,b1,b2)
-        t = np.copy(yy)
-        tmask = ( np.sum(mem_xs1[ind],axis = 1) != 0 )
 
-        y1, _ = forward(mem_xs1[ind],w1,w2,b1,b2)
-
-        # print mem_re[ind]
-
-        t[np.arange(MSIZE),mem_ac[ind]] += mem_re[ind] + GAMMA * np.max(y1 ,axis = 1) * tmask
-        # print t- yy
-        # print np.sqrt(np.sum(yy**2))
-        print np.mean((t-yy)**2)
-        xw1,xw2,xb1,xb2 = backward(t,yy,h,mem_xs[ind],w2,b2)
-        dw1 = MOMENTUM * dw1 + ETA / (1 + ((iter * 20 + i ) / 10)) * xw1
-        dw2 = MOMENTUM * dw2 + ETA / (1 + ((iter * 20 + i ) / 10)) * xw2
-        db1 = MOMENTUM * db1 + ETA / (1 + ((iter * 20 + i ) / 10)) * xb1
-        db2 = MOMENTUM * db2 + ETA / (1 + ((iter * 20 + i ) / 10)) * xb2
-        w1 -=  dw1
-        w2 -=  dw2
-        b1 -=  db1
-        b2 -=  db2
-        # yyy,_ = forward(xs[ind],w1,w2,b1,b2)
-        # print np.mean((t-yyy)**2)
-
-    # break
     iter += 1
-    # print iter
+    print iter
 
+
+plt.figure()
 plt.plot(np.array(pl))
+plt.title('Duration')
 plt.show()
