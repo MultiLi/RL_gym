@@ -3,38 +3,19 @@ import gym
 from matplotlib import pyplot as plt
 import sys
 sys.path.append('..')
-from nn_util.multilayer import Multilayer
+from util.multilayer import Multilayer
+from util.exp_replay import Exp_Replay as Memory
 
-ETA = 0.01
-GAMMA = 0.98
-MOMENTUM = 0.95
+ETA = 0.001
+GAMMA = 0.95
+MOMENTUM = 0
 EPS_START = 0.05
 EPS_END = 0.95
-MEM_SIZE = 5000
+MEM_SIZE = 10000
 BATCH = 10
-MSIZE = 30
-
-
-class Memory():
-    def __init__(self, num):
-        self.pointer = -1
-        self.size = num
-        self.length = 0
-        self.s = np.zeros((num,4))
-        self.a = np.zeros(num,dtype = int)
-        self.r = np.zeros(num)
-        self.s1 = np.zeros((num,4))
-
-    def insert(self,s,a,r,ns):
-        self.pointer += 1
-        if self.pointer == self.size:
-            self.pointer = 0
-        self.s[self.pointer] = s
-        self.a[self.pointer] = a
-        self.r[self.pointer] = r
-        self.s1[self.pointer] = ns
-        if self.length < self.size:
-            self.length += 1
+MSIZE = 20
+EP = 20
+ITER = 50
 
 
 nn = Multilayer([[4,'in'],[64,'tanh'],[32,'tanh'],[2,'linear']],
@@ -46,18 +27,24 @@ pl = []
 env = gym.make('CartPole-v0')
 rendering = False
 iter = 0
-while iter<50:
+anum = 0
+while iter<ITER:
     # Game data collection
+
+    if anum / EP > 200 or rendering:
+        rendering = True
+        env.render()
+    anum = 0
     num = 0
     obs = env.reset()
     ep = 0
-    while ep < 30:
-        if num > 1000 or rendering:
-            rendering = True
-            env.render()
+    while ep < EP:
+
         nn.predict(obs.reshape(1,-1))
         q = nn.o[nn.depth][0]
-        action = np.argmax(q) if np.random.rand() < EPS_START + (EPS_END - EPS_START) * (iter * 30 + ep)/ 1000  else env.action_space.sample()
+        action = np.argmax(q)
+        if np.random.rand() > EPS_START + (EPS_END - EPS_START) * (iter * EP + ep)/ ITER / EP:
+            action = env.action_space.sample()
         obs1,r,done,info = env.step(action)
         num += 1
         exp_replay.insert(obs,action,r, obs1)
@@ -65,12 +52,13 @@ while iter<50:
 
         if done:
             obs = env.reset()
-            exp_replay.r[exp_replay.pointer] = -10
+            exp_replay.r[exp_replay.pointer] = -1
             pl.append(num)
             num = 0
             ep += 1
+            anum += num
 
-        if exp_replay.length <  BATCH * MSIZE :
+        if exp_replay.length <  10 * BATCH * MSIZE :
             continue
 
         '''
@@ -88,8 +76,8 @@ while iter<50:
             t[np.arange(MSIZE), exp_replay.a[ind]] = y
 
             nn.backprop(t)
-            nn.update()
 
+        nn.update()
 
     iter += 1
     print iter

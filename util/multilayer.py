@@ -16,7 +16,7 @@ class Multilayer():
         self.delta[i]   n x m   [1,depth]        gradient of output
     '''
 
-    def __init__(self,layer,eta = 0.1, epoch = 10, moment = 0.9, T = 100,reg = 0.01,batch_num = 1000):
+    def __init__(self,layer,eta = 0.1, epoch = 10, moment = 0.9, T = 100,reg = 0,batch_num = 1000):
         self.layer = layer
         self.depth = len(layer)
         self.weight = {}
@@ -49,9 +49,12 @@ class Multilayer():
         self.o[i] = X
         while i < self.depth - 1:
             self.o[i+1] = getattr(act,self.layer[i][1])(np.dot(self.o[i], self.weight[i]) + self.b[i])
+
             i += 1
 
         self.o[i+1] = np.dot(self.o[i],self.weight[i])
+        # if self.o[i + 1][0,0] == np.nan:
+        #     print i
         # self.o[i+1] = np.exp(np.dot(self.o[i],self.weight[i]) + self.b[i])
         # self.o[i+1] /= np.sum(self.o[i+1],axis = 1).reshape((-1,1))
 
@@ -62,11 +65,13 @@ class Multilayer():
         '''
 
         self.delta[self.depth] = (self.o[self.depth] - Y) / Y.shape[0]
-        self.eta_n *= 0.999
+        self.eta_n *= 0.99
         i = self.depth - 1
         while i > 0:
-            self.dw[i] = self.moment * self.dw[i] - self.eta_n * (np.dot(self.o[i].T, self.delta[i+1]) +  self.reg * self.weight[i])
-            self.db[i] = self.moment * self.db[i] - self.eta_n * np.sum(self.delta[i+1], axis = 0).reshape(1,-1)
+            # self.dw[i] = self.moment * self.dw[i] - self.eta_n * (np.dot(self.o[i].T, self.delta[i+1]) +  self.reg * self.weight[i])
+            self.dw[i] -= self.eta_n * (np.dot(self.o[i].T, self.delta[i+1]))
+            # self.db[i] = self.moment * self.db[i] - self.eta_n * np.sum(self.delta[i+1], axis = 0).reshape(1,-1)
+            self.db[i] -= self.eta_n * np.sum(self.delta[i+1], axis = 0).reshape(1,-1)
             if i != 1:
                 self.delta[i] = np.dot(self.delta[i+1], self.weight[i].T) * getattr(act,'d'+self.layer[i-1][1])(self.o[i])
             i -= 1
@@ -77,6 +82,8 @@ class Multilayer():
         while i > 0:
             self.weight[i] += self.dw[i]
             self.b[i] += self.db[i]
+            self.dw[i] = np.zeros_like(self.weight[i])
+            self.db[i] = np.zeros_like(self.b[i])
             i -= 1
         return
 

@@ -17,7 +17,7 @@ def dtanh(x):
     return 1.7159 * 2/3 *(1- (x/1.7159)**2)
 
 def drelu(x):
-    return (x>0)
+    return x
 
 def softmax(x):
     score = np.exp(x)
