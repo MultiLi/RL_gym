@@ -3,7 +3,7 @@ import gym
 from matplotlib import pyplot as plt
 import sys
 sys.path.append('..')
-from util.multilayer import Multilayer
+import tensorflow as tf
 from util.exp_replay import Exp_Replay as Memory
 
 ETA = 0.001
@@ -18,72 +18,93 @@ EP = 20
 ITER = 50
 
 
-nn = Multilayer([[4,'in'],[64,'tanh'],[32,'tanh'],[2,'linear']],
-                eta = ETA, moment = MOMENTUM, reg = 0)
+class NaiveQN():
+    def __init__(self,layer):
+        self.layers = {}
+        self.x_in = tf.placeholder(tf.float32, shape=[None, layer[0]], name = 'input')
+        self.layers['layer1'] =  tf.nn.relu(tf.contrib.layers.fully_connected(
+                                                inputs = self.x_in,
+                                                num_outputs = layer[1]))
+        for i in range(2,len(layer)- 1):
+            self.layers['layer'+str(i)] = tf.nn.relu(tf.contrib.layers.fully_connected(
+                                        inputs = self.layers['layer'+str(i -1)],
+                                        num_outputs = layer[i]))
 
-exp_replay = Memory(MEM_SIZE)
+        self.out = tf.contrib.layers.fully_connected(
+                                    inputs = self.layers['layer'+str(len(layer) -2)],
+                                    num_outputs = layer[-1])
 
-pl = []
+        self.label = tf.placeholder(tf.float32, shape = [None, layer[-1]])
+
+        self.mseloss = tf.losses.mean_squared_error(labels = self.label,
+                                                    predictions = self.out)
+
+
 env = gym.make('CartPole-v0')
+o = env.reset()
+layer = [env.observation_space.shape[0],64,32, env.action_space.n]
+memory = Memory(MEM_SIZE,[layer[0]])
+
+model = NaiveQN(layer)
+sess = tf.Session()
+optimizer = tf.train.RMSPropOptimizer(1e-3).minimize(model.mseloss)
+sess.run(tf.global_variables_initializer())
+
+
 rendering = False
-iter = 0
-anum = 0
-while iter<ITER:
-    # Game data collection
 
-    if anum / EP > 200 or rendering:
-        rendering = True
-        env.render()
-    anum = 0
-    num = 0
-    obs = env.reset()
-    ep = 0
-    while ep < EP:
+episode = 0
+dummy_i = 0
+turns = 0
+avrQ = []
+avrq = 0
 
-        nn.predict(obs.reshape(1,-1))
-        q = nn.o[nn.depth][0]
-        action = np.argmax(q)
-        if np.random.rand() > EPS_START + (EPS_END - EPS_START) * (iter * EP + ep)/ ITER / EP:
+with sess.as_default():
+
+    while episode < 20000:
+        turns += 1
+        dummy_i += 1
+
+        if rendering:
+            env.render()
+        o = o.reshape(1,-1)
+        out_s = model.out.eval(feed_dict = {model.x_in : o})
+        action = np.argmax(out_s)
+        if np.random.rand() > EPS_START + turns * EPS_END / 2000:
             action = env.action_space.sample()
-        obs1,r,done,info = env.step(action)
-        num += 1
-        exp_replay.insert(obs,action,r, obs1)
-        obs = obs1
 
-        if done:
-            obs = env.reset()
-            exp_replay.r[exp_replay.pointer] = -1
-            pl.append(num)
-            num = 0
-            ep += 1
-            anum += num
+        avrq += np.ravel(out_s)[action]
 
-        if exp_replay.length <  10 * BATCH * MSIZE :
+        o1,reward,done,_ = env.step(action) # take a random action
+        o1 = o1.reshape(1,-1)
+        memory.insert(o,action,reward,o1, False)
+        o = o1
+
+        if done or dummy_i == 200:
+            memory.t[memory.pointer] = True
+            memory.r[memory.pointer] = -200
+            o = env.reset()
+            episode += 1
+            if dummy_i > 1000:
+                rendering = True
+            avrQ.append(avrq * 1.0 / dummy_i)
+            print 'Episode :' + str(episode), avrQ[-1],dummy_i
+            exist = 0
+            dummy_i = 0
+
+        if memory.length < 5 * BATCH*MSIZE:
             continue
 
-        '''
-        mini- batch version
-        '''
-        ind_ = np.random.permutation(exp_replay.length)[:BATCH * MSIZE]
+        ind_ = np.random.permutation(memory.length)[:BATCH * MSIZE]
+
         for i in range(BATCH):
             ind = ind_[i * MSIZE: (i+1)* MSIZE ]
 
-            nn.predict(exp_replay.s1[ind])
-            y = exp_replay.r[ind] + GAMMA * np.max(nn.o[nn.depth],axis = 1) * (exp_replay.r[ind]> 0)
+            out_s1 = model.out.eval(feed_dict = {model.x_in: memory.s1[ind]})
 
-            nn.predict(exp_replay.s[ind])
-            t = np.copy(nn.o[nn.depth])
-            t[np.arange(MSIZE), exp_replay.a[ind]] = y
+            # For non-terminal states, Q(s,a) = r(s,a) + gamma * max(Q(s',a')) (Empirical Mean)
+            y = memory.r[ind] + GAMMA * np.max(out_s1,axis = 1) * (np.logical_not(memory.t[ind]))
+            out_s = model.out.eval(feed_dict = {model.x_in: memory.s[ind]})
+            out_s[np.arange(MSIZE), memory.a[ind]] = y
 
-            nn.backprop(t)
-
-        nn.update()
-
-    iter += 1
-    print iter
-
-
-plt.figure()
-plt.plot(np.array(pl))
-plt.title('Duration')
-plt.show()
+            optimizer.run(feed_dict = {model.x_in:memory.s[ind], model.label:out_s})
