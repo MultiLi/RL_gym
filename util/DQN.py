@@ -33,4 +33,4 @@ class DQN():
         self.y = tf.placeholder(tf.float32, shape=[None,out_dim], name = 'output')
 
         #loss
-        self.mseloss = tf.contrib.losses.mean_squared_error(labels = self.y, predictions = self.fc_2_o )
+        self.mseloss = tf.losses.mean_squared_error(labels = self.y, predictions = self.fc_2_o )
