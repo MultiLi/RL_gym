@@ -17,3 +17,9 @@ Easy problem with 16 states and 4 actions, can be solved by implementing Q-learn
 1. Frozen_Lake: Classical Q-learning with state-action table.
 2. Frozen_Lake_nn: Q-learning with trivial vectorized input and weights corresponding to the state-action table.
 3. Frozen_Lake_nn_tf: Rewrite 2 using tensorflow. But the performance is quite poor.
+
+
+## Atari
+It's time to try some more difficult and more interesting problems!
+
+1. Double-Dunk: Implement a standard DQN with tensorflow. Maybe it's the time to get my hands dirty.
