@@ -24,10 +24,10 @@ class Exp_Replay():
         self.pointer += 1
         if self.pointer == self.size:
             self.pointer = 0
-        self.s[self.pointer] = s
+        self.s[self.pointer] = s.reshape((1,)+ s.shape)
         self.a[self.pointer] = a
         self.r[self.pointer] = r
-        self.s1[self.pointer] = ns
+        self.s1[self.pointer] = ns.reshape((1,)+ ns.shape)
         self.t[self.pointer] = t
         if self.length < self.size:
             self.length += 1

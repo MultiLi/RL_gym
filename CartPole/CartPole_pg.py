@@ -1,9 +1,8 @@
 import gym
 from gym import wrappers
 import numpy as np
-from matplotlib import pyplot as plt
 
-REWARD_DECAY = 0.95
+GAMMA = 0.95
 LRATE = 0.01
 MOMENTUM = 0.95
 BATCH_SIZE = 5
@@ -32,7 +31,7 @@ def accumulated_reward(r):
     accu_reward = np.zeros((len(r),1))
     i = len(r) - 1
     while i >= 0:
-        accu = REWARD_DECAY * accu + r[i]
+        accu = GAMMA * accu + r[i]
         accu_reward[i] = accu
         i -= 1
     accu_reward -= np.mean(accu_reward)
